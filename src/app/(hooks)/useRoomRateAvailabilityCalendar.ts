@@ -1,9 +1,7 @@
 // Import necessary modules and types
 import Fetch from "@/utils/Fetch";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { Dayjs } from "dayjs";
-
-// ToDo: Add infinite query support
 
 // Define interfaces for the data structures used in the calendar
 export interface IRoomInventory {
@@ -54,26 +52,31 @@ interface IResponse {
   nextCursor?: number; // available if you pass a cursor as query param
 }
 
-// Custom hook to fetch room rate availability calendar data
+// Custom hook to fetch room rate availability calendar data with
 export default function useRoomRateAvailabilityCalendar(params: IParams) {
-  // Construct the URL with query parameters
-  const url = new URL(
-    `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/property/${params.property_id}/rate-calendar/assessment`
-  );
+  const baseUrl = `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/property/${params.property_id}/rate-calendar/assessment`;
 
-  url.search = new URLSearchParams({
-    start_date: params.start_date,
-    end_date: params.end_date,
-    // cursor: "0", // for infinite scroll
-  }).toString();
-
-  // Use React Query's useQuery hook to fetch data
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: ["property_room_calendar", params], // Unique query key
-    queryFn: async () =>
-      await Fetch<IResponse>({
+    queryFn: async ({ pageParam = 0 }) => {
+      // Construct the URL with query parameters
+      const url = new URL(baseUrl);
+
+      url.search = new URLSearchParams({
+        start_date: params.start_date,
+        end_date: params.end_date,
+        cursor: String(pageParam), // Pass cursor for pagination
+      }).toString();
+
+      // Adjusted to match potential nested response
+      const response = await Fetch<{ data: IResponse }>({
         method: "GET",
         url,
-      }), // Fetch data from the API
+      });
+
+      return response.data; // Ensure only relevant data is returned
+    },
+    getNextPageParam: (nextCursor) => nextCursor ?? undefined, // Access the `nextCursor` property correctly
+    initialPageParam: 1, // Define the initial cursor value
   });
 }
